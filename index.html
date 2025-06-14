@@ -11,189 +11,152 @@
   #locRow{display:none}          /* shown after a key is validated */
   #spinner{display:none}
 </style>
+
 <!-- Firebase v10 (modular) -->
 <script type="module">
-    /* ───────────────── Firebase SDKs (ES-modules from the official CDN) ───── */
-    import { initializeApp }     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import {
-       getAuth,
-       createUserWithEmailAndPassword,
-       signInWithEmailAndPassword,     // <— handy later
-     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-     import {
-      getFirestore,          // base
-      collection,
-      query,
-      where,
-      getDocs,
-      doc,
-      setDoc,
-      serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";    import { getAnalytics }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
+  /* ───── Firebase imports ───── */
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getFirestore,
+    collection, query, where, getDocs,
+    doc, setDoc, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    /* ───────────────── Your web-app config (public!) ──────────────────────── */
-    const firebaseConfig = {
-        apiKey:            "AIzaSyCq94fjBpyR12Q64YIRxdvzTsVK9efAcOY", 
-        authDomain:        "parksheets-d09b6.firebaseapp.com",
-        projectId:         "parksheets-d09b6",
-        storageBucket:      "parksheets-d09b6.appspot.com",  
-        messagingSenderId: "830027416547",
-        appId:             "1:830027416547:web:1b3a565a2f7ff2c9b696d6",
-        measurementId:     "G-9P02F3ZMC9"                
-    };
+  /* ───── Firebase config (public) ───── */
+  const firebaseConfig = {
+    apiKey:            "AIzaSyCq94fjBpyR12Q64YIRxdvzTsVK9efAcOY",
+    authDomain:        "parksheets-d09b6.firebaseapp.com",
+    projectId:         "parksheets-d09b6",
+    storageBucket:     "parksheets-d09b6.appspot.com",
+    messagingSenderId: "830027416547",
+    appId:             "1:830027416547:web:1b3a565a2f7ff2c9b696d6",
+    measurementId:     "G-9P02F3ZMC9"
+  };
 
-    /* ───────────────── Init Firebase once per page ────────────────────────── */
-    const app        = initializeApp(firebaseConfig);
-    const auth       = getAuth(app);
-    const db         = getFirestore(app);
-    const analytics  = getAnalytics(app);
+  /* ───── Init ───── */
+  const app   = initializeApp(firebaseConfig);
+  const auth  = getAuth(app);
+  const db    = getFirestore(app);
 
-/* helpers ---------------------------------------------------------- */
-const $ = (sel)=>document.querySelector(sel);
-const alertBox = $("#alert");
-function show(msg, ok=false){
-  alertBox.textContent=msg;
-  alertBox.className = ok? "secondary-outline" : "contrast";
-}
-function busy(on){
-  $("#spinner").style.display = on?"inline-block":"none";
-  $("#submitBtn").disabled = on; $("#checkBtn").disabled = on;
-}
+  /* ───── tiny helpers ───── */
+  const $ = s => document.querySelector(s);
+  const alertBox = $("#alert");
+  const busy = on => {
+    $("#spinner").style.display = on ? "inline-block" : "none";
+    $("#submitBtn").disabled = $("#checkBtn").disabled = on;
+  };
+  const show = (msg, ok=false) => {
+    alertBox.textContent = msg;
+    alertBox.className   = ok ? "secondary-outline" : "contrast";
+  };
 
-async function checkCompanyKey(key) {
-  // db was created earlier with getFirestore(app)
-  const q = query(
-    collection(db, "companies"),
-    where("key",    "==", key),
-    where("status", "==", true)
-  );
+  /* ───── Validate key & populate locations ───── */
+  let companyDoc = null;
+  $("#checkBtn").addEventListener("click", async () => {
+    show(""); busy(true);
+    try {
+      const key = $("#companyKey").value.trim();
+      if (!key) return show("Enter a key first");
 
-  const snap = await getDocs(q);
-  return snap.empty ? null : snap.docs[0].data();   // 1st matching company
-}
+      const q = query(
+        collection(db,"companies"),
+        where("key","==",key),
+        where("status","==",true)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return show("Invalid / inactive key");
 
-/* 2) Validate company-key and populate location menu --------------- */
-let companyDoc = null;           // cache selected company
-$("#checkBtn").addEventListener("click", async()=>{
-  show(""); busy(true);
-  try{
-    const key = $("#companyKey").value.trim();
-    if(!key) return show("Enter a key first");
+      companyDoc = snap.docs[0];
+      const locs = companyDoc.data().locations || [];
 
-    const q = query(
-      collection(db,"companies"),
-      where("key","==",key),
-      where("status","==",true)
-    );
-    const snap = await getDocs(q);
-    if(snap.empty) return show("Invalid / inactive key");
+      const sel = $("#location");  sel.innerHTML = "";
+      locs.forEach(l=>sel.insertAdjacentHTML("beforeend",
+        `<option value="${l}">${l}</option>`));
 
-    companyDoc = snap.docs[0];
-    const data = companyDoc.data();
-    const locs = data.locations || [];
+      $("#locRow").style.display = "block";
+      show(`Company: ${companyDoc.data().name}`, true);
+    } catch(e){ show(e.message) } finally { busy(false); }
+  });
 
-    const sel = $("#location");
-    sel.innerHTML = "";                // wipe old
-    locs.forEach(l=>{
-      const opt=document.createElement("option");
-      opt.value=opt.textContent=l; sel.appendChild(opt);
-    });
-    $("#locRow").style.display="block";
-    show(`Company: ${data.name}`,true);
+  /* ───── Register ───── */
+  $("#regForm").addEventListener("submit", async e=>{
+    e.preventDefault(); show("");
+    if (!companyDoc) return show("Validate company key first");
 
-  }catch(e){show(e.message)}
-  finally{busy(false)}
-});
+    const data = Object.fromEntries(new FormData(e.target));
+    if (data.pass !== data.confirm) return show("Passwords don’t match");
 
-/* 3) Register user ------------------------------------------------- */
-$("#regForm").addEventListener("submit", async e=>{
-  e.preventDefault(); show("");
-  if(!companyDoc) return show("Validate company key first");
-  const f = Object.fromEntries(new FormData(e.target));
+    busy(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, data.email, data.pass);
+      const uid  = cred.user.uid;
 
-  if(f.pass!==f.confirm) return show("Passwords don’t match");
-  if(!f.first||!f.last||!f.email||!f.pass) return show("Fill all fields");
+      /* role is based on checkbox */
+      const role = data.isAdmin === "on" ? "admin" : "non-admin";
 
-  busy(true);
-  try{
-    /* auth → create user */
-    const cred = await createUserWithEmailAndPassword(auth,f.email,f.pass);
-    const uid  = cred.user.uid;
+      await setDoc(doc(db,"users",uid), {
+        firstName  : data.first,
+        lastName   : data.last,
+        email      : data.email,
+        companyID  : companyDoc.id,
+        companyName: companyDoc.data().name,
+        location   : data.location,
+        role,
+        createdAt  : serverTimestamp()
+      });
 
-    /* profile doc */
-    const profile = {
-      firstName : f.first,
-      lastName  : f.last,
-      email     : f.email,
-      companyID : companyDoc.id,
-      companyName: companyDoc.data().name,
-      location  : f.location,
-      role      : "non-admin",
-      createdAt : serverTimestamp
-    };
-    await setDoc(doc(db,"users",uid), profile);
+      await setDoc(
+        doc(db,"companies",companyDoc.id,"locations",data.location,"employees",uid),
+        { fullName:`${data.first} ${data.last}`, role }
+      );
 
-    /* add to employees bucket */
-    await setDoc(
-      doc(db,"companies",companyDoc.id,
-               "locations",f.location,
-               "employees",uid),
-      { fullName:`${f.first} ${f.last}`, role: profile.role }
-    );
-
-    show("✓ Account created!  Ask your admin to activate it.",true);
-    $("#regForm").reset(); $("#locRow").style.display="none"; companyDoc=null;
-
-  }catch(e){show(e.message)}
-  finally{busy(false)}
-});
+      show("✓ Account created! You can now sign in.", true);
+      e.target.reset();
+      $("#locRow").style.display="none";
+      companyDoc = null;
+    } catch(e){ show(e.message) } finally { busy(false); }
+  });
 </script>
 </head>
 <body>
 <main>
-<h2>ParkSheets User Registration</h2>
+  <h2>ParkSheets&nbsp;•&nbsp;User&nbsp;Registration</h2>
 
-<article class="grid">
+  <article class="grid">
+    <form id="regForm">
+      <label>First Name <input name="first" required></label>
+      <label>Last  Name <input name="last"  required></label>
+      <label>Email      <input name="email" type="email" required></label>
+      <label>Password   <input name="pass"  type="password" required></label>
+      <label>Confirm    <input name="confirm" type="password" required></label>
 
-<form id="regForm">
-  <label>First Name
-    <input name="first" required />
-  </label>
+      <label>Company&nbsp;Key
+        <input id="companyKey">
+      </label>
+      <button type="button" id="checkBtn">Check&nbsp;Key</button>
 
-  <label>Last Name
-    <input name="last" required />
-  </label>
+      <!-- admin toggle -->
+      <label>
+        <input type="checkbox" name="isAdmin">
+        Admin account?
+      </label>
 
-  <label>Email
-    <input name="email" type="email" required />
-  </label>
+      <div id="locRow">
+        <label>Location
+          <select id="location" name="location"></select>
+        </label>
+      </div>
 
-  <label>Password
-    <input name="pass" type="password" required />
-  </label>
+      <button id="submitBtn" type="submit">Register</button>
+      <div id="spinner" aria-busy="true" role="status"></div>
+    </form>
 
-  <label>Confirm Password
-    <input name="confirm" type="password" required />
-  </label>
-
-  <label>Company Key
-    <input id="companyKey" />
-  </label>
-  <button type="button" id="checkBtn">Check&nbsp;Key</button>
-
-  <div id="locRow">
-    <label>Location
-      <select id="location" name="location"></select>
-    </label>
-  </div>
-
-  <button id="submitBtn" type="submit">Register</button>
-  <div id="spinner" aria-busy="true" role="status"></div>
-</form>
-
-<div id="alert" role="alert"></div>
-
-</article>
+    <div id="alert" role="alert"></div>
+  </article>
 </main>
 </body>
 </html>
