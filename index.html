@@ -32,13 +32,13 @@
 
     /* ───────────────── Your web-app config (public!) ──────────────────────── */
     const firebaseConfig = {
-        apiKey:            "AIzaSyCq94fjBpyR12Q64YIRxdvzTsVK9efAcOY",  // ← public
+        apiKey:            "AIzaSyCq94fjBpyR12Q64YIRxdvzTsVK9efAcOY", 
         authDomain:        "parksheets-d09b6.firebaseapp.com",
         projectId:         "parksheets-d09b6",
-        storageBucket:     "parksheets-d09b6.appspot.com",   // fixed
+        storageBucket:      "parksheets-d09b6.appspot.com",  
         messagingSenderId: "830027416547",
         appId:             "1:830027416547:web:1b3a565a2f7ff2c9b696d6",
-        measurementId:     "G-9P02F3ZMC9"                    // optional
+        measurementId:     "G-9P02F3ZMC9"                
     };
 
     /* ───────────────── Init Firebase once per page ────────────────────────── */
@@ -128,8 +128,7 @@ $("#regForm").addEventListener("submit", async e=>{
       companyName: companyDoc.data().name,
       location  : f.location,
       role      : "non-admin",
-      activated : false,          // admin will flip later
-      createdAt : Date.now()
+      createdAt : new Date()
     };
     await setDoc(doc(db,"users",uid), profile);
 
