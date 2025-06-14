@@ -27,7 +27,8 @@
       where,
       getDocs,
       doc,
-      setDoc
+      setDoc,
+      serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";    import { getAnalytics }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
 
     /* ───────────────── Your web-app config (public!) ──────────────────────── */
@@ -128,7 +129,7 @@ $("#regForm").addEventListener("submit", async e=>{
       companyName: companyDoc.data().name,
       location  : f.location,
       role      : "non-admin",
-      createdAt : new Date()
+      createdAt : serverTimestamp
     };
     await setDoc(doc(db,"users",uid), profile);
 
