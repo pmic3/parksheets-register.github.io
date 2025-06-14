@@ -13,24 +13,28 @@
 </style>
 <!-- Firebase v10 (modular) -->
 <script type="module">
-import { initializeApp }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth,
-         createUserWithEmailAndPassword }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore,
-         doc, setDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    /* ───────────────── Firebase SDKs (ES-modules from the official CDN) ───── */
+    import { initializeApp }     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth }           from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAnalytics }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
 
-/* 🔧 1) paste **your own** web-app config here */
-const firebaseConfig = {
-  apiKey:            "AIza…",
-  authDomain:        "parksheets.firebaseapp.com",
-  projectId:         "parksheets",
-  storageBucket:     "parksheets.appspot.com",
-  messagingSenderId: "…",
-  appId:             "…"
-};
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getFirestore(app);
+    /* ───────────────── Your web-app config (public!) ──────────────────────── */
+    const firebaseConfig = {
+        apiKey:            "AIzaSyCq94fjBpyR12Q64YIRxdvzTsVK9efAcOY",  // ← public
+        authDomain:        "parksheets-d09b6.firebaseapp.com",
+        projectId:         "parksheets-d09b6",
+        storageBucket:     "parksheets-d09b6.appspot.com",   // fixed
+        messagingSenderId: "830027416547",
+        appId:             "1:830027416547:web:1b3a565a2f7ff2c9b696d6",
+        measurementId:     "G-9P02F3ZMC9"                    // optional
+    };
+
+    /* ───────────────── Init Firebase once per page ────────────────────────── */
+    const app        = initializeApp(firebaseConfig);
+    const auth       = getAuth(app);
+    const db         = getFirestore(app);
+    const analytics  = getAnalytics(app);
 
 /* helpers ---------------------------------------------------------- */
 const $ = (sel)=>document.querySelector(sel);
@@ -124,7 +128,7 @@ $("#regForm").addEventListener("submit", async e=>{
 </head>
 <body>
 <main>
-<h2>Driver Registration</h2>
+<h2>ParkSheets User Registration</h2>
 
 <article class="grid">
 
