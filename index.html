@@ -15,9 +15,20 @@
 <script type="module">
     /* ───────────────── Firebase SDKs (ES-modules from the official CDN) ───── */
     import { initializeApp }     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth }           from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { getFirestore }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getAnalytics }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
+    import {
+       getAuth,
+       createUserWithEmailAndPassword,
+       signInWithEmailAndPassword,     // <— handy later
+     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+     import {
+      getFirestore,          // base
+      collection,
+      query,
+      where,
+      getDocs,
+      doc,
+      setDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";    import { getAnalytics }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
 
     /* ───────────────── Your web-app config (public!) ──────────────────────── */
     const firebaseConfig = {
@@ -46,6 +57,18 @@ function show(msg, ok=false){
 function busy(on){
   $("#spinner").style.display = on?"inline-block":"none";
   $("#submitBtn").disabled = on; $("#checkBtn").disabled = on;
+}
+
+async function checkCompanyKey(key) {
+  // db was created earlier with getFirestore(app)
+  const q = query(
+    collection(db, "companies"),
+    where("key",    "==", key),
+    where("status", "==", true)
+  );
+
+  const snap = await getDocs(q);
+  return snap.empty ? null : snap.docs[0].data();   // 1st matching company
 }
 
 /* 2) Validate company-key and populate location menu --------------- */
