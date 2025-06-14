@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ParkSheets • User Registration</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet"
+      href="https://unpkg.com/@picocss/pico@2.*/css/pico.min.css" />
+<style>
+  main{max-width:600px;margin:auto;padding-top:3rem}
+  #locRow{display:none}          /* shown after a key is validated */
+  #spinner{display:none}
+</style>
+<!-- Firebase v10 (modular) -->
+<script type="module">
+import { initializeApp }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth,
+         createUserWithEmailAndPassword }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore,
+         doc, setDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* 🔧 1) paste **your own** web-app config here */
+const firebaseConfig = {
+  apiKey:            "AIza…",
+  authDomain:        "parksheets.firebaseapp.com",
+  projectId:         "parksheets",
+  storageBucket:     "parksheets.appspot.com",
+  messagingSenderId: "…",
+  appId:             "…"
+};
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+/* helpers ---------------------------------------------------------- */
+const $ = (sel)=>document.querySelector(sel);
+const alertBox = $("#alert");
+function show(msg, ok=false){
+  alertBox.textContent=msg;
+  alertBox.className = ok? "secondary-outline" : "contrast";
+}
+function busy(on){
+  $("#spinner").style.display = on?"inline-block":"none";
+  $("#submitBtn").disabled = on; $("#checkBtn").disabled = on;
+}
+
+/* 2) Validate company-key and populate location menu --------------- */
+let companyDoc = null;           // cache selected company
+$("#checkBtn").addEventListener("click", async()=>{
+  show(""); busy(true);
+  try{
+    const key = $("#companyKey").value.trim();
+    if(!key) return show("Enter a key first");
+
+    const q = query(
+      collection(db,"companies"),
+      where("key","==",key),
+      where("status","==",true)
+    );
+    const snap = await getDocs(q);
+    if(snap.empty) return show("Invalid / inactive key");
+
+    companyDoc = snap.docs[0];
+    const data = companyDoc.data();
+    const locs = data.locations || [];
+
+    const sel = $("#location");
+    sel.innerHTML = "";                // wipe old
+    locs.forEach(l=>{
+      const opt=document.createElement("option");
+      opt.value=opt.textContent=l; sel.appendChild(opt);
+    });
+    $("#locRow").style.display="block";
+    show(`Company: ${data.name}`,true);
+
+  }catch(e){show(e.message)}
+  finally{busy(false)}
+});
+
+/* 3) Register user ------------------------------------------------- */
+$("#regForm").addEventListener("submit", async e=>{
+  e.preventDefault(); show("");
+  if(!companyDoc) return show("Validate company key first");
+  const f = Object.fromEntries(new FormData(e.target));
+
+  if(f.pass!==f.confirm) return show("Passwords don’t match");
+  if(!f.first||!f.last||!f.email||!f.pass) return show("Fill all fields");
+
+  busy(true);
+  try{
+    /* auth → create user */
+    const cred = await createUserWithEmailAndPassword(auth,f.email,f.pass);
+    const uid  = cred.user.uid;
+
+    /* profile doc */
+    const profile = {
+      firstName : f.first,
+      lastName  : f.last,
+      email     : f.email,
+      companyID : companyDoc.id,
+      companyName: companyDoc.data().name,
+      location  : f.location,
+      role      : "non-admin",
+      activated : false,          // admin will flip later
+      createdAt : Date.now()
+    };
+    await setDoc(doc(db,"users",uid), profile);
+
+    /* add to employees bucket */
+    await setDoc(
+      doc(db,"companies",companyDoc.id,
+               "locations",f.location,
+               "employees",uid),
+      { fullName:`${f.first} ${f.last}`, role: profile.role }
+    );
+
+    show("✓ Account created!  Ask your admin to activate it.",true);
+    $("#regForm").reset(); $("#locRow").style.display="none"; companyDoc=null;
+
+  }catch(e){show(e.message)}
+  finally{busy(false)}
+});
+</script>
+</head>
+<body>
+<main>
+<h2>Driver Registration</h2>
+
+<article class="grid">
+
+<form id="regForm">
+  <label>First Name
+    <input name="first" required />
+  </label>
+
+  <label>Last Name
+    <input name="last" required />
+  </label>
+
+  <label>Email
+    <input name="email" type="email" required />
+  </label>
+
+  <label>Password
+    <input name="pass" type="password" required />
+  </label>
+
+  <label>Confirm Password
+    <input name="confirm" type="password" required />
+  </label>
+
+  <label>Company Key
+    <input id="companyKey" />
+  </label>
+  <button type="button" id="checkBtn">Check&nbsp;Key</button>
+
+  <div id="locRow">
+    <label>Location
+      <select id="location" name="location"></select>
+    </label>
+  </div>
+
+  <button id="submitBtn" type="submit">Register</button>
+  <div id="spinner" aria-busy="true" role="status"></div>
+</form>
+
+<div id="alert" role="alert"></div>
+
+</article>
+</main>
+</body>
+</html>
