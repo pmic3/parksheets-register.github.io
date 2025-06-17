@@ -99,6 +99,7 @@
       const role = data.isAdmin === "on" ? "admin" : "non-admin";
 
       await setDoc(doc(db,"users",uid), {
+        id         : uid,
         firstName  : data.first,
         lastName   : data.last,
         email      : data.email,
