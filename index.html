@@ -8,7 +8,7 @@
       href="https://unpkg.com/@picocss/pico@2.*/css/pico.min.css" />
 <style>
   main{max-width:600px;margin:auto;padding-top:3rem}
-  #locRow{display:none}          /* shown after a key is validated */
+  #locRow{display:none}
   #spinner{display:none}
 </style>
 
@@ -42,7 +42,7 @@
   const auth  = getAuth(app);
   const db    = getFirestore(app);
 
-  /* ───── tiny helpers ───── */
+  /* ───── helpers ───── */
   const $ = s => document.querySelector(s);
   const alertBox = $("#alert");
   const busy = on => {
@@ -54,8 +54,22 @@
     alertBox.className   = ok ? "secondary-outline" : "contrast";
   };
 
-  /* ───── Validate key & populate locations ───── */
+  /* ───── Validate company key ───── */
   let companyDoc = null;
+
+  function setMechanicOptionEnabled(isEnabled) {
+    const roleSelect = document.querySelector('select[name="role"]');
+    const mechOpt = roleSelect?.querySelector('option[value="mechanic"]');
+    if (!mechOpt) return;
+
+    mechOpt.disabled = !isEnabled;
+
+    // If mechanic is selected but not allowed, force to non-admin
+    if (!isEnabled && roleSelect.value === "mechanic") {
+      roleSelect.value = "non-admin";
+    }
+  }
+
   $("#checkBtn").addEventListener("click", async () => {
     show(""); busy(true);
     try {
@@ -71,15 +85,30 @@
       if (snap.empty) return show("Invalid / inactive key");
 
       companyDoc = snap.docs[0];
-      const locs = companyDoc.data().locations || [];
+      const companyData = companyDoc.data() || {};
 
-      const sel = $("#location");  sel.innerHTML = "";
-      locs.forEach(l=>sel.insertAdjacentHTML("beforeend",
-        `<option value="${l}">${l}</option>`));
-
+      const locs = companyData.locations || [];
+      const sel = $("#location");
+      sel.innerHTML = "";
+      locs.forEach(l =>
+        sel.insertAdjacentHTML("beforeend", `<option value="${l}">${l}</option>`)
+      );
       $("#locRow").style.display = "block";
-      show(`Company: ${companyDoc.data().name}`, true);
-    } catch(e){ show(e.message) } finally { busy(false); }
+
+      // Feature gate: mechanic allowed only if features.preTripInspection === true
+      const preTripEnabled = Boolean(companyData?.features?.preTripInspection === true);
+      setMechanicOptionEnabled(preTripEnabled);
+
+      if (preTripEnabled) {
+        show(`Company: ${companyData.name} (Mechanic enabled)`, true);
+      } else {
+        show(`Company: ${companyData.name} (Mechanic disabled for this company)`, true);
+      }
+    } catch(e){
+      show(e.message);
+    } finally {
+      busy(false);
+    }
   });
 
   /* ───── Register ───── */
@@ -90,60 +119,76 @@
     const data = Object.fromEntries(new FormData(e.target));
     if (data.pass !== data.confirm) return show("Passwords don’t match");
 
+    // Enforce mechanic gate again on submit (server-side rules should also enforce later)
+    const companyData = companyDoc.data() || {};
+    const preTripEnabled = Boolean(companyData?.features?.preTripInspection === true);
+    if (data.role === "mechanic" && !preTripEnabled) {
+      return show("Mechanic accounts are only allowed for companies with preTripInspection enabled.");
+    }
+
     busy(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, data.email, data.pass);
       const uid  = cred.user.uid;
 
-      /* role is based on checkbox */
-      const role = data.isAdmin === "on" ? "admin" : "non-admin";
+      const role = data.role; // admin | non-admin | mechanic
 
       await setDoc(doc(db,"users",uid), {
-        id         : uid,
-        firstName  : data.first,
-        lastName   : data.last,
-        email      : data.email,
-        companyID  : companyDoc.id,
-        companyName: companyDoc.data().name,
-        location   : data.location,
+        id: uid,
+        firstName: data.first,
+        lastName: data.last,
+        email: data.email,
+        companyID: companyDoc.id,
+        companyName: companyData.name,
+        location: data.location,
         role,
-        createdAt  : serverTimestamp()
+        createdAt: serverTimestamp()
       });
 
       await setDoc(
         doc(db,"companies",companyDoc.id,"locations",data.location,"employees",uid),
-        { fullName:`${data.first} ${data.last}`, role }
+        { fullName:`${data.first} ${data.last}`, role, createdAt: serverTimestamp() }
       );
 
       show("✓ Account created! You can now sign in.", true);
       e.target.reset();
       $("#locRow").style.display="none";
       companyDoc = null;
-    } catch(e){ show(e.message) } finally { busy(false); }
+
+      // Reset mechanic option to enabled by default until next key check
+      setMechanicOptionEnabled(true);
+    } catch(e){
+      show(e.message);
+    } finally {
+      busy(false);
+    }
   });
 </script>
 </head>
 <body>
 <main>
-  <h2>ParkSheets&nbsp;•&nbsp;User&nbsp;Registration</h2>
+  <h2>ParkSheets • User Registration</h2>
 
   <article class="grid">
     <form id="regForm">
       <label>First Name <input name="first" required></label>
-      <label>Last  Name <input name="last"  required></label>
-      <label>Email      <input name="email" type="email" required></label>
-      <label>Password   <input name="pass"  type="password" required></label>
-      <label>Confirm    <input name="confirm" type="password" required></label>
+      <label>Last Name <input name="last" required></label>
+      <label>Email <input name="email" type="email" required></label>
+      <label>Password <input name="pass" type="password" required></label>
+      <label>Confirm <input name="confirm" type="password" required></label>
 
-      <label>Company&nbsp;Key
+      <label>Company Key
         <input id="companyKey">
       </label>
-      <button type="button" id="checkBtn">Check&nbsp;Key</button>
+      <button type="button" id="checkBtn">Check Key</button>
 
-      <!-- admin toggle -->
-      <label>
-        <input type="checkbox" name="isAdmin">
-        Admin account?
+      <!-- Role dropdown -->
+      <label>Role
+        <select name="role" required>
+          <option value="non-admin">Non-Admin</option>
+          <option value="mechanic">Mechanic</option>
+          <option value="admin">Admin</option>
+        </select>
       </label>
 
       <div id="locRow">
@@ -157,7 +202,7 @@
     </form>
 
     <p style="margin-top:0.75rem;">
-        <a href="request-reset.html">Forgot password?</a>
+      <a href="request-reset.html">Forgot password?</a>
     </p>
 
     <div id="alert" role="alert"></div>
